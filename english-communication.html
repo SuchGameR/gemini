@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>英単語クイズ (Vocabulary Quiz)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        /* Custom styles for feedback */
+        .correct-answer {
+            background-color: #28a745 !important; /* Green */
+            color: white !important;
+            border-color: #28a745 !important;
+        }
+        .incorrect-answer {
+            background-color: #dc3545 !important; /* Red */
+            color: white !important;
+            border-color: #dc3545 !important;
+        }
+        .disabled-button {
+            opacity: 0.7;
+            cursor: not-allowed;
+        }
+        /* Basic message box for alerts */
+        .message-box {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 1rem 1.5rem;
+            border-radius: 0.375rem;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            z-index: 1000;
+            display: none; /* Hidden by default */
+        }
+        .message-box-success {
+            background-color: #d4edda; /* Light green */
+            color: #155724; /* Dark green */
+            border: 1px solid #c3e6cb;
+        }
+        .message-box-error {
+            background-color: #f8d7da; /* Light red */
+            color: #721c24; /* Dark red */
+            border: 1px solid #f5c6cb;
+        }
+        .message-box-info {
+            background-color: #d1ecf1; /* Light blue */
+            color: #0c5460; /* Dark blue */
+            border: 1px solid #bee5eb;
+        }
+    </style>
+</head>
+<body class="bg-slate-100 flex flex-col items-center justify-center min-h-screen p-4">
+
+    <div id="message-box" class="message-box"></div>
+
+    <div id="quiz-container" class="bg-white p-6 sm:p-8 rounded-xl shadow-2xl w-full max-w-xl transition-all duration-500">
+        <h1 class="text-2xl sm:text-3xl font-bold text-center text-sky-700 mb-6">英単語クイズ</h1>
+
+        <div id="loading-message" class="text-center text-gray-600 my-8">
+            <p>クイズを準備中です...</p>
+            <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-sky-600 mx-auto mt-4"></div>
+        </div>
+        
+        <div id="quiz-content" class="hidden">
+            <div id="question-area" class="mb-6 p-4 bg-sky-50 rounded-lg shadow">
+                <p class="text-sm text-gray-600 mb-1">この意味に合う英単語を選んでください:</p>
+                <p id="japanese-meaning" class="text-xl sm:text-2xl font-semibold text-sky-800 text-center min-h-[3em] flex items-center justify-center"></p>
+            </div>
+
+            <div id="choices-area" class="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mb-6">
+                <!-- Choice buttons will be dynamically inserted here -->
+            </div>
+
+            <div id="feedback-area" class="min-h-[2em] mb-4 text-center">
+                <p id="feedback-text" class="text-lg font-medium"></p>
+            </div>
+
+            <div id="score-area" class="text-center text-lg text-gray-700 mb-6">
+                スコア: <span id="score" class="font-bold text-sky-600">0</span> / <span id="total-questions-display" class="font-bold text-gray-600">0</span>
+            </div>
+            
+            <div class="flex justify-center">
+                <button id="next-question-btn" class="bg-sky-600 hover:bg-sky-700 text-white font-semibold py-3 px-6 rounded-lg shadow-md transition-colors duration-150 w-full sm:w-auto">次の問題へ</button>
+            </div>
+        </div>
+
+        <div id="final-score-area" class="hidden text-center p-6 bg-sky-50 rounded-lg shadow-inner">
+            <h2 class="text-2xl sm:text-3xl font-bold text-sky-700 mb-4">クイズ終了！</h2>
+            <p class="text-xl text-gray-800 mb-6">
+                最終スコア: <span id="final-score" class="font-extrabold text-green-600"></span> / <span id="final-total" class="font-extrabold text-gray-700"></span>
+            </p>
+            <button id="restart-btn" class="bg-emerald-500 hover:bg-emerald-600 text-white font-semibold py-3 px-8 rounded-lg shadow-md transition-colors duration-150">もう一度挑戦する</button>
+        </div>
+         <div id="error-message-area" class="hidden text-center p-6 bg-red-50 rounded-lg shadow-inner">
+            <h2 class="text-2xl font-bold text-red-700 mb-4">エラー</h2>
+            <p id="error-text" class="text-lg text-red-800"></p>
+            <button id="reload-btn" class="mt-4 bg-sky-500 hover:bg-sky-600 text-white font-semibold py-2 px-6 rounded-lg shadow-md transition-colors duration-150">再読み込み</button>
+        </div>
+    </div>
+
+    <script>
+        // DOM Elements
+        const loadingMessageEl = document.getElementById('loading-message');
+        const quizContentEl = document.getElementById('quiz-content');
+        const japaneseMeaningEl = document.getElementById('japanese-meaning');
+        const choicesAreaEl = document.getElementById('choices-area');
+        const feedbackTextEl = document.getElementById('feedback-text');
+        const scoreEl = document.getElementById('score');
+        const totalQuestionsDisplayEl = document.getElementById('total-questions-display');
+        const nextQuestionBtn = document.getElementById('next-question-btn');
+        const finalScoreAreaEl = document.getElementById('final-score-area');
+        const finalScoreEl = document.getElementById('final-score');
+        const finalTotalEl = document.getElementById('final-total');
+        const restartBtn = document.getElementById('restart-btn');
+        const quizContainerEl = document.getElementById('quiz-container');
+        const errorMessageAreaEl = document.getElementById('error-message-area');
+        const errorTextEl = document.getElementById('error-text');
+        const reloadBtn = document.getElementById('reload-btn');
+        const messageBoxEl = document.getElementById('message-box');
+
+        let vocabulary = [];
+        let shuffledVocab = [];
+        let currentQuestionIndex = 0;
+        let score = 0;
+        let answerSelected = false;
+        const NUM_CHOICES = 4;
+
+        // CSV data is now directly embedded here.
+        const vocabularyDataRaw = `"単語","意味"
+"couple","カップル"
+"conversation","会話"
+"compared","比較された"
+"compared to A","Aと比べて/Aと比較すると"
+"on the other hand","一方で"
+"be similar to A","Aに似ている"
+"intention","意図/意向"
+"context","文脈/状況"
+"rely","頼る"
+"rely on A","Aに頼る"
+"be made up of A","Aで構成されている"
+"immigrant","移民"
+"implicitly","暗黙のうちに/それとなく"
+"guest","客/ゲスト"
+"offer","提供する/申し出る"
+"literally","文字通り / 本当に"
+"communicator","伝え手/コミュニケーター"
+"according","~によると"
+"according to A","Aによると"
+"Erin Meyer","エリン・メイヤー"
+"specialize","専門とする"
+"intercultural","異文化間の"
+"followed by A","Aが続く/Aがあとに来る"
+"indirect","間接的な"
+"explicit","明示的な"
+"negative","否定的な"
+"generally","一般的に"
+"unspoken","暗黙の/言葉にされていない"
+"stereotype","ステレオタイプ/固定観念"
+"direct","直接的な"
+"feedback","フィードバック/意見"
+"consider","考慮する/検討する"
+"rude","失礼な/無礼な"
+"value","価値"
+"cultural","文化的な"
+"lead A to B","AをBに導く/Aが原因でBになる"
+"individual","個人"
+"lens","視点/レンズ"
+"fail to do","~できない/~しそこなう"
+"communicate","伝える/コミュニケーションを取る"
+"humility","謙虚さ/謙遜"
+"speak up(out)","意見をはっきり言う/声を上げる"
+"relationship","関係/人間関係"
+"range","範囲/幅"
+"source","源/出典/原因"
+"endless","無限の/ 果てしない"
+"commencement","卒業式/開始"
+"No big deal deal","大したことない / たいしたことじゃない 取引/重要なこと"
+"connect","点をつなぐ/点と点を結ぶ"
+"dot","点"
+"drop out (of A)","(Aを)中退する/辞める"
+"Reed College","リード大学"
+"have no idea","全くわからない"
+"do A with (about) B","Bに関してAする"
+"figure","わかる/推測する"
+"figure out A/ figure A out","Aを理解する/解決する"
+"work out C","Cがうまくいく / 解決する"
+"look back (on (to) A)","(Aを)振り返る"
+"require","必要とする/求める"
+"drop in on A","Aにふらっと立ち寄る"
+"whatever","なんでも/ 何であれ"
+"calligraphy","カリグラフィー/書道"
+"serif","セリフ体"
+"san-serif","サンセリフ体/ゴシック体"
+"typeface","書体/フォントのデザイン"
+"combination","組み合わせ"
+"typography","タイポグラフィー/文字デザイン"
+"historical","歴史的な"
+"artistcally","芸術的に"
+"subtle","微妙な/繊細な"
+"none","全く〜ない"
+"practical","実用的な/現実的な"
+"Mac(intosh)","マック(マッキントッシュ)"
+"backwards","逆向きに/後ろ向きに"
+"trust","信頼/信用"
+"somehow","どういうわけか/なぜか"
+"A is fired from B","AがBをクビになる"
+"devastating","壊滅的な打撃の大きい"
+"start over","やり直す/ から始める"
+"successful","成功した/成功している"
+"animation","アニメーション"
+"studio","スタジオ"
+"in a remarkable turn of events","驚くべき出来事で/意外な展開で"
+"remarkable","驚くべき/顕著な"
+"have got to do","~しなければならない"
+"satisfied","満足した"
+"settle","落ち着く/ 定住する"
+"fortunately","幸運にも/運良く"
+"srugey","調査/アンケート"
+"certainly","確かに/間違いなく"
+"waste A (in) doing","Aを〜するのに無駄にする"
+"drown","溺れる"
+"drown out A/ down A out","Aをかき消す"
+"importantly","重要なことに/とくに重要なのは"
+"intuition","直感/勘"
+"secondary","二次的な/補助的な"
+"publication","出版物/刊行物"
+"issue","問題/論点"`;
+
+        /**
+         * Parses CSV data string into an array of vocabulary objects.
+         * @param {string} csvData The raw CSV string data.
+         * @returns {Array<{english: string, japanese: string}>} Parsed vocabulary.
+         */
+        function parseVocabulary(csvData) {
+            const lines = csvData.trim().split(/\r\n|\r|\n/); 
+            const parsedVocab = [];
+            const startIndex = (lines[0] && lines[0].toLowerCase().includes('"単語"')) ? 1 : 0;
+
+            for (let i = startIndex; i < lines.length; i++) {
+                const line = lines[i].trim();
+                if (!line) continue;
+                const match = line.match(/^"(.*?)","(.*?)"$/);
+                if (match && match[1] && match[2]) {
+                    let english = match[1].replace(/\\n/g, ' ').trim();
+                    let japanese = match[2].replace(/\\n/g, ' ').trim();
+                    if (!english || !japanese) {
+                        console.warn("Skipping line with empty field after cleaning:", line);
+                        continue;
+                    }
+                    parsedVocab.push({ english, japanese });
+                } else {
+                     console.warn("Skipping malformed CSV line (regex mismatch):", line);
+                }
+            }
+            return parsedVocab;
+        }
+
+        /**
+         * Shuffles an array in place.
+         * @param {Array} array Array to shuffle.
+         * @returns {Array} The shuffled array.
+         */
+        function shuffleArray(array) {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+            return array;
+        }
+        
+        /**
+         * Displays a message to the user.
+         * @param {string} message The message to display.
+         * @param {string} type 'success', 'error', or 'info'.
+         */
+        function showMessage(message, type = 'info') {
+            messageBoxEl.textContent = message;
+            messageBoxEl.className = 'message-box'; 
+            switch (type) {
+                case 'success':
+                    messageBoxEl.classList.add('message-box-success');
+                    break;
+                case 'error':
+                    messageBoxEl.classList.add('message-box-error');
+                    break;
+                case 'info':
+                default:
+                    messageBoxEl.classList.add('message-box-info');
+                    break;
+            }
+            messageBoxEl.style.display = 'block';
+            setTimeout(() => {
+                messageBoxEl.style.display = 'none';
+            }, 3000); 
+        }
+
+        /**
+         * Initializes the quiz using embedded data.
+         */
+        function initializeQuiz() {
+            loadingMessageEl.style.display = 'block';
+            quizContentEl.style.display = 'none';
+            finalScoreAreaEl.style.display = 'none';
+            errorMessageAreaEl.style.display = 'none';
+            quizContainerEl.classList.remove('max-w-md');
+            quizContainerEl.classList.add('max-w-xl');
+
+            try {
+                if (!vocabularyDataRaw || vocabularyDataRaw.trim() === "") {
+                    throw new Error("埋め込まれた単語データが空です。");
+                }
+                vocabulary = parseVocabulary(vocabularyDataRaw);
+
+                if (vocabulary.length === 0) {
+                    showError("クイズに使える単語がデータから見つかりませんでした。データ内容を確認してください。");
+                    return;
+                }
+                startQuizLogic(); // Renamed to avoid confusion with this function
+            } catch (error) {
+                console.error("Error initializing or parsing vocabulary data:", error);
+                showError(error.message || "単語データの初期化または解析中にエラーが発生しました。");
+            }
+        }
+        
+        /**
+         * Sets up the quiz logic after vocabulary is loaded and parsed.
+         */
+        function startQuizLogic() { // Renamed from startQuiz
+            shuffledVocab = shuffleArray([...vocabulary]);
+            currentQuestionIndex = 0;
+            score = 0;
+            answerSelected = false;
+
+            scoreEl.textContent = score;
+            totalQuestionsDisplayEl.textContent = shuffledVocab.length;
+            
+            loadingMessageEl.style.display = 'none';
+            quizContentEl.style.display = 'block';
+            finalScoreAreaEl.style.display = 'none'; 
+            
+            loadQuestion();
+        }
+        
+        /**
+         * Displays an error message and hides the quiz content.
+         * @param {string} message The error message to display.
+         */
+        function showError(message) {
+            loadingMessageEl.style.display = 'none';
+            quizContentEl.style.display = 'none';
+            finalScoreAreaEl.style.display = 'none';
+            errorMessageAreaEl.style.display = 'block';
+            errorTextEl.textContent = message;
+            quizContainerEl.classList.remove('max-w-xl');
+            quizContainerEl.classList.add('max-w-md'); 
+        }
+
+        /**
+         * Loads the current question and its choices.
+         */
+        function loadQuestion() {
+            if (currentQuestionIndex >= shuffledVocab.length) {
+                endQuiz();
+                return;
+            }
+
+            answerSelected = false;
+            const currentWord = shuffledVocab[currentQuestionIndex];
+            japaneseMeaningEl.textContent = currentWord.japanese;
+            feedbackTextEl.textContent = '';
+            choicesAreaEl.innerHTML = ''; 
+
+            const correctAnswer = currentWord.english;
+            let choices = [correctAnswer];
+            const distractorsPool = vocabulary.filter(v => v.english !== correctAnswer).map(v => v.english);
+            shuffleArray(distractorsPool);
+            
+            const numDistractorsNeeded = Math.min(NUM_CHOICES - 1, distractorsPool.length);
+            for (let i = 0; i < numDistractorsNeeded; i++) {
+                choices.push(distractorsPool[i]);
+            }
+            
+            choices = [...new Set(choices)]; 
+            let placeholderCounter = 1;
+            while (choices.length < NUM_CHOICES && placeholderCounter <= vocabulary.length) {
+                const potentialFiller = vocabulary[Math.floor(Math.random() * vocabulary.length)].english;
+                if (!choices.includes(potentialFiller)) {
+                    choices.push(potentialFiller);
+                }
+                placeholderCounter++; 
+            }
+            shuffleArray(choices);
+
+            choices.forEach(choice => {
+                const button = document.createElement('button');
+                button.textContent = choice;
+                button.classList.add('w-full', 'bg-white', 'hover:bg-sky-100', 'text-sky-700', 'font-medium', 'py-3', 'px-4', 'rounded-lg', 'border-2', 'border-sky-300', 'transition-all', 'duration-150', 'shadow-sm');
+                button.onclick = () => selectAnswer(button, choice, correctAnswer);
+                choicesAreaEl.appendChild(button);
+            });
+
+            nextQuestionBtn.classList.add('disabled-button');
+            nextQuestionBtn.disabled = true;
+        }
+
+        /**
+         * Handles the user's answer selection.
+         * @param {HTMLButtonElement} selectedButton The button element that was clicked.
+         * @param {string} selectedEnglishWord The English word chosen by the user.
+         * @param {string} correctAnswer The correct English word for the current question.
+         */
+        function selectAnswer(selectedButton, selectedEnglishWord, correctAnswer) {
+            if (answerSelected) return; 
+            answerSelected = true;
+
+            Array.from(choicesAreaEl.children).forEach(btn => {
+                btn.disabled = true;
+                btn.classList.add('opacity-70', 'cursor-not-allowed');
+                btn.classList.remove('hover:bg-sky-100');
+            });
+
+            if (selectedEnglishWord === correctAnswer) {
+                score++;
+                scoreEl.textContent = score;
+                feedbackTextEl.textContent = '正解！ (Correct!)';
+                feedbackTextEl.className = 'text-lg font-medium text-green-600';
+                selectedButton.classList.remove('bg-white', 'border-sky-300', 'text-sky-700');
+                selectedButton.classList.add('correct-answer');
+            } else {
+                feedbackTextEl.textContent = `不正解。正解は "${correctAnswer}" でした。`;
+                feedbackTextEl.className = 'text-lg font-medium text-red-600';
+                selectedButton.classList.remove('bg-white', 'border-sky-300', 'text-sky-700');
+                selectedButton.classList.add('incorrect-answer');
+
+                Array.from(choicesAreaEl.children).forEach(btn => {
+                    if (btn.textContent === correctAnswer) {
+                        btn.classList.remove('bg-white', 'border-sky-300', 'text-sky-700', 'opacity-70');
+                        btn.classList.add('correct-answer'); 
+                        btn.classList.remove('cursor-not-allowed'); 
+                    }
+                });
+            }
+
+            nextQuestionBtn.classList.remove('disabled-button');
+            nextQuestionBtn.disabled = false;
+        }
+
+        /**
+         * Moves to the next question.
+         */
+        function handleNextQuestion() {
+            currentQuestionIndex++;
+            loadQuestion();
+        }
+
+        /**
+         * Ends the quiz and displays the final score.
+         */
+        function endQuiz() {
+            quizContentEl.style.display = 'none';
+            finalScoreAreaEl.style.display = 'block';
+            finalScoreEl.textContent = score;
+            finalTotalEl.textContent = shuffledVocab.length;
+            let message = "お疲れ様でした！";
+            const percentage = (shuffledVocab.length > 0) ? (score / shuffledVocab.length) * 100 : 0;
+            if (percentage >= 80) message = "素晴らしい成績です！";
+            else if (percentage >= 50) message = "よくできました！";
+            showMessage(message, 'success');
+        }
+
+        // Event Listeners
+        nextQuestionBtn.addEventListener('click', handleNextQuestion);
+        restartBtn.addEventListener('click', initializeQuiz); 
+        reloadBtn.addEventListener('click', () => window.location.reload());
+
+        // Initialize the quiz when the script loads
+        initializeQuiz();
+
+    </script>
+</body>
+</html>
